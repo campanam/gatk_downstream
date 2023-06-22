@@ -74,7 +74,7 @@ process vcftoolsSiteFilter {
 	// Perform VCFtools site filters on VCFs
 	// Modified from RatesTools 0.5.15: Armstrong & Campana 2023
 	
-	publishDir "$params.outdir/03_VCFtoolsFilterChrVCFs", mode: 'copy'
+	publishDir "$params.outdir/03_VCFtoolsFilterChrVCFs", mode: 'copy', pattern: '*vcftools.vcf.gz'
 	
 	input:
 	path raw_vcf from raw_vcf_ch
@@ -124,7 +124,7 @@ process gatkSiteFilter {
 	// Perform GATK site filters on VCFs
 	// Modified from RatesTools 0.5.15: Armstrong & Campana 2023
 	
-	publishDir "$params.outdir/04_GATKFilterChrVCFs", mode: 'copy'
+	publishDir "$params.outdir/04_GATKFilterChrVCFs", mode: 'copy', pattern: '*gatk.vcf.gz'
 	
 	input:
 	path vcftools_vcf from vcftools_ok_vcf_ch
@@ -134,23 +134,23 @@ process gatkSiteFilter {
 	val site_filters from params.gatk_site_filters
 	
 	output:
-	tuple path("${vcftools_vcf.baseName[0..-8]}.gatk.tmp"), path(vcftools_vcf), path("${vcftools_vcf.baseName[0..-8]}.gatk.vcf.gz") into gatk_vcf_ch
+	tuple path("${vcftools_vcf.baseName[0..-17]}.gatk.tmp"), path(vcftools_vcf), path("${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz") into gatk_vcf_ch
 	
 	script:
 	if (site_filters == "NULL")
 		"""
-		ln -s $vcftools_vcf ${vcftools_vcf.baseName[0..-8]}.gatk.vcf.gz
+		ln -s $vcftools_vcf ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz
 		vcftools --gzvcf $vcftools_vcf
-		cp .command.log ${vcftools_vcf.baseName[0..-8]}.gatk.tmp
+		cp .command.log ${vcftools_vcf.baseName[0..-17]}.gatk.tmp
 		"""
 	else
 		"""
 		tabix $vcftools_vcf
 		$gatk VariantFiltration -R $refseq -V $vcftools_vcf -O tmp.vcf.gz $site_filters
-		$gatk SelectVariants -R $refseq -V tmp.vcf.gz -O ${vcftools_vcf.baseName[0..-8]}.gatk.vcf.gz --exclude-filtered
+		$gatk SelectVariants -R $refseq -V tmp.vcf.gz -O ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz --exclude-filtered
 		rm tmp.vcf.gz
-		vcftools --gzvcf ${vcftools_vcf.baseName[0..-8]}.gatk.vcf.gz
-		tail .command.log > ${vcftools_vcf.baseName[0..-8]}.gatk.tmp
+		vcftools --gzvcf ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz
+		tail .command.log > ${vcftools_vcf.baseName[0..-17]}.gatk.tmp
 		"""
 
 }
