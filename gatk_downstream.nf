@@ -200,7 +200,7 @@ process concatenateVCFs {
 			fileline+="  ${stem}_\${chrs[\$i]}.gatk.OK.vcf.gz"
 		fi
 	done
-	bcftools concat -O v -o {stem}.all.vcf.gz\$fileline
+	bcftools concat -O v -o ${stem}.all.vcf.gz\$fileline
 	"""
 
 }
