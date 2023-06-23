@@ -195,7 +195,7 @@ process concatenateVCFs {
 	fileline=''
 	readarray -t chrs < $chrfile
 	len=\${#chrs[@]}
-	for ((i=0; i<$len; i++)); do
+	for ((i=0; i<\$len; i++)); do
 		if [ -f ${stem}_\${chrs[\$i].gatk.OK.vcf.gz ]; then
 			fileline+="  ${stem}_\${chrs[\$i].gatk.OK.vcf.gz"
 		fi
