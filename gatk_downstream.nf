@@ -12,7 +12,7 @@ process extractChrNames {
 	path refseq from params.refseq
 	
 	output:
-	path "${refseq.baseName}.chr.txt" into chrfile_ch
+	path "${refseq.baseName}.chr.txt" into chrfile_ch, chrfile_ch2
 	
 	"""
 	grep '>' $refseq | sed 's/>//g' | cut -f1 -d ' ' > ${refseq.baseName}.chr.txt
@@ -173,4 +173,48 @@ process sanityCheckLogsGatk {
 	logstats.sh $logfile $allvcflog $filtvcflog 1 $min_filt_contig_length > ${logfile.baseName}.log
 	"""
 	
+}
+
+process concatenateVCFs {
+
+	// Concatenate VCFs using BCFtools concat
+	// Attempt to sort by order in original file
+	
+	publishDir "$params.outdir/05_ConcatVCF", mode: 'copy'
+	
+	input:
+	path chrfile from chrfile_ch2
+	path "*.vcf.gz" from gatk_ok_vcf_ch.collect()
+	val stem from params.stem
+	
+	output:
+	path "${stem}.all.vcf.gz"
+	
+	"""
+	#!/usr/bin/env bash
+	fileline=''
+	readarray -t chrs < $chrfile
+	len=\${#chrs[@]}
+	for ((i=0; i<$len; i++)); do
+		if [ -f ${stem}_\${chrs[\$i].gatk.OK.vcf.gz ]; then
+			fileline+="  ${stem}_\${chrs[\$i].gatk.OK.vcf.gz"
+		fi
+	done
+	bcftools concat -O v -o {stem}.all.vcf.gz\$fileline
+	"""
+
+}
+
+workflow.onComplete {
+	if (workflow.success) {
+		println "Joint-genotyping pipeline completed successfully at $workflow.complete!"
+		if (params.email != "NULL") {
+			sendMail(to: params.email, subject: 'Joint-genotyping pipeline successful completion', body: "Joint-genotyping pipeline completed successfully at $workflow.complete!")
+		}
+	} else {
+		println "Joint-genotyping pipeline terminated with errors at $workflow.complete.\nError message: $workflow.errorMessage"
+		if (params.email != "NULL") {
+			sendMail(to: params.email, subject: 'Joint-genotyping pipeline terminated with errors', body: "Joint-genotyping pipeline terminated with errors at $workflow.complete.\nError message: $workflow.errorMessage")
+		}
+	}
 }
