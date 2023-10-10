@@ -45,6 +45,45 @@ process createGenomicsDB {
 
 }
 
+process genMapIndex {
+
+	// Generate GenMap index. From RatesTools 0.5.16
+
+	
+	input:
+	path refseq from params.refseq
+	val gm_tmpdir from params.gm_tmpdir
+	
+	output:
+	path "${refseq.simpleName}_index" into genmap_index_ch
+	path "${refseq.simpleName}_index/*" into genmap_index_files_ch
+	
+	"""
+	export TMPDIR=${gm_tmpdir}
+	if [ ! -d ${gm_tmpdir} ]; then mkdir ${gm_tmpdir}; fi
+	genmap index -F ${refseq} -I ${refseq.simpleName}_index
+	"""
+
+}
+
+process genMapMap {
+
+	// Calculate mappability using GenMap and filter using filterGM.  From RatesTools 0.5.16
+	
+	input:
+	path refseq from params.refseq
+	path genmap_index from genmap_index_ch
+	path '*' from genmap_index_files_ch
+	
+	output:
+	path "${refseq.simpleName}_genmap.1.0.bed" into genmap_ch
+	
+	"""
+	genmap map -K 30 -E 2 -T ${task.cpus} -I ${refseq.simpleName}_index/ -O ${refseq.simpleName}_genmap -b
+	filterGM.rb ${refseq.simpleName}_genmap.bed 1.0 exclude > ${refseq.simpleName}_genmap.1.0.bed
+	"""
+}
+
 process jointGenotype {
 
 	// Joint-genotype gVCFs
@@ -188,7 +227,7 @@ process concatenateVCFs {
 	val stem from params.stem
 	
 	output:
-	path "${stem}.all.vcf.gz"
+	path "${stem}.all.vcf.gz" into concat_vcf_ch
 	
 	"""
 	#!/usr/bin/env bash
@@ -204,6 +243,26 @@ process concatenateVCFs {
 	"""
 
 }
+
+process filterMappability {
+
+	// Remove sites with mappability < 1.0 using BEDtools
+	
+	publishDir "$params.outdir/06_MapFiltVCF", mode: 'copy'
+	
+	input:
+	path vcf from concat_vcf_ch
+	path bed from genmap_ch
+	val stem from params.stem
+	
+	output:
+	path "${stem}.map.vcf.gz"
+	
+	"""
+	bedtools subtract -a $vcf -b $bed -header | gzip > (${stem}.map.vcf.gz)
+	"""
+
+}	
 
 workflow.onComplete {
 	if (workflow.success) {
