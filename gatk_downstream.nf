@@ -277,6 +277,7 @@ process snpRelate {
 	path vcf from map_vcf_ch
 	val stem from params.stem
 	val snprelate_opts from params.snprelate_opts
+	val snprelate_ld from params.snprelate_ld
 	
 	output:
 	path "${stem}.gds"
@@ -290,9 +291,9 @@ process snpRelate {
 	source(system("which kinshipUtils.R", intern = TRUE))
 	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${stem}.gds\', method = "biallelic.only")
 	snps <- snpgdsOpen(\'${stem}.gds\')
-	pruned <- snpgdsLDpruning(snps, $snprelate_opts)
-	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), $snprelate_opts)
-	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts)
+	pruned <- snpgdsLDpruning(snps, $snprelate_opts, $snprelate_ld)
+	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), $snprelate_opts, num.threads = ${task.cpus})
+	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts, num.threads = ${task.cpus})
 	write.kinship.matrix(bootstrapped, meanfile = \"${stem}_bootstrap_meanvalues.csv\", cifile = \"${stem}_random_kinship_CI.csv\")
 	system(\"cp .command.log ${stem}.snprelate.log\")
 	save(\"${stem}.Rdata\")
