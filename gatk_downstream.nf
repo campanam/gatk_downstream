@@ -271,7 +271,7 @@ process snpRelate {
 
 	// Estimate kinship using SNPRelate
 	
-	publishDir "$params.outdir/07_SNPRelate", mode 'copy'
+	publishDir "$params.outdir/07_SNPRelate", mode: 'copy'
 	
 	input:
 	path vcf from map_vcf_ch
