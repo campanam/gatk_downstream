@@ -285,6 +285,7 @@ process snpRelate {
 	"""
 	#!/usr/bin/env Rscript
 	library("SNPRelate")
+	system("pwd")
 	source(system("which kinshipUtils.R", intern = TRUE))
 	snpgdsVCF2GDS(Sys.readlink($vcf), ${stem}.gds, method = "biallelic.only")
 	snps <- snpgdsOpen(${stem}.gds)
