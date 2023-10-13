@@ -286,11 +286,11 @@ process snpRelate {
 	#!/usr/bin/env Rscript
 	library("SNPRelate")
 	source(system("which kinshipUtils.R", intern = TRUE))
-	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), ${stem}.gds, method = "biallelic.only")
-	snps <- snpgdsOpen(${stem}.gds)
+	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${stem}.gds\', method = "biallelic.only")
+	snps <- snpgdsOpen(\'${stem}.gds\')
 	pruned <- snpgdsLDpruning(snps, $snprelate_opts)
 	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts)
-	write.kinship.matrix(bootstrapped, meanfile = "${stem}_bootstrap_meanvalues.csv", "${stem}_random_kinship_CI.csv")
+	write.kinship.matrix(bootstrapped, meanfile = \"${stem}_bootstrap_meanvalues.csv\", \"${stem}_random_kinship_CI.csv\")
 	"""
 
 }
