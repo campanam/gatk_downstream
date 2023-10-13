@@ -259,13 +259,43 @@ process filterMappability {
 	val stem from params.stem
 	
 	output:
-	path "${stem}.map.vcf.gz"
+	path "${stem}.map.vcf.gz" into map_vcf_ch
 	
 	"""
 	bedtools subtract -a $vcf -b $bed -header | gzip > ${stem}.map.vcf.gz
 	"""
 
-}	
+}
+
+process snpRelate {
+
+	// Estimate kinship using SNPRelate
+	
+	publishDir "$params.outdir/07_SNPRelate", mode 'copy'
+	
+	input:
+	path vcf from map_vcf_ch
+	val stem from params.stem
+	val snprelate_opts from params.snprelate_opts
+	
+	output:
+	path "${stem}.gds"
+	path "${stem}*.csv"
+	
+	"""
+	#!/usr/bin/env Rscript
+	library("SNPRelate")
+	source(`which kinshipUtils.R`)
+	snpgdsVCF2GDS($vcf, ${stem}.gds, method = "biallelic.only")
+	snps <- snpgdsOpen(${stem}.gds)
+	pruned <- snpgdsLDpruning(snps, $snprelate_opts)
+	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts)
+	write.kinship.matrix(bootstrapped, meanfile = "${stem}_bootstrap_meanvalues.csv", "${stem}_random_kinship_CI.csv")
+	"""
+
+}
+	
+	
 
 workflow.onComplete {
 	if (workflow.success) {
