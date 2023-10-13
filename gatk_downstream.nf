@@ -282,6 +282,7 @@ process snpRelate {
 	path "${stem}.gds"
 	path "${stem}*.csv"
 	path "${stem}.snprelate.log"
+	path "${stem}.Rdata"
 	
 	"""
 	#!/usr/bin/env Rscript
@@ -290,9 +291,11 @@ process snpRelate {
 	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${stem}.gds\', method = "biallelic.only")
 	snps <- snpgdsOpen(\'${stem}.gds\')
 	pruned <- snpgdsLDpruning(snps, $snprelate_opts)
+	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), $snprelate_opts)
 	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts)
 	write.kinship.matrix(bootstrapped, meanfile = \"${stem}_bootstrap_meanvalues.csv\", cifile = \"${stem}_random_kinship_CI.csv\")
 	system(\"cp .command.log ${stem}.snprelate.log\")
+	save(\"${stem}.Rdata\")
 	"""
 
 }
