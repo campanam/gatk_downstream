@@ -147,15 +147,15 @@ process sanityCheckLogsVcftools {
 	
 	input:
 	tuple path(logfile), path(allvcflog), path(filtvcflog) from vcftools_vcf_ch
-	val min_contig_length from params.min_contig_length
-	val min_filt_contig_length from params.min_filt_contig_length
+	val min_contig_vars from params.min_contig_vars
+	val min_filt_contig_vars from params.min_filt_contig_vars
 	
 	output:
 	path "${logfile.baseName}.log" into vcftools_log_sanity_ch
 	path "${filtvcflog.baseName[0..-5]}.OK.vcf.gz" optional true into vcftools_ok_vcf_ch
 	
 	"""
-	logstats.sh $logfile $allvcflog $filtvcflog $min_contig_length $min_filt_contig_length > ${logfile.baseName}.log
+	logstats.sh $logfile $allvcflog $filtvcflog $min_contig_vars $min_filt_contig_vars > ${logfile.baseName}.log
 	"""
 	
 }
@@ -200,19 +200,19 @@ process gatkSiteFilter {
 process sanityCheckLogsGatk {
 	
 	// Sanity check logs for GATK site filtering and remove too short contigs
-	// Dummy value of 1 for min_contig_length since already evaluated and no longer accurate
+	// Dummy value of 1 for min_contig_vars since already evaluated and no longer accurate
 	// Modified from RatesTools 0.5.15: Armstrong & Campana 2023
 
 	input:
 	tuple path(logfile), path(allvcflog), path(filtvcflog) from gatk_vcf_ch
-	val min_filt_contig_length from params.min_filt_contig_length
+	val min_filt_contig_vars from params.min_filt_contig_vars
 	
 	output:
 	path "${logfile.baseName}.log" into gatk_sitefilt_log_sanity_ch
 	path "${filtvcflog.baseName[0..-5]}.OK.vcf.gz" optional true into gatk_ok_vcf_ch
 	
 	"""
-	logstats.sh $logfile $allvcflog $filtvcflog 1 $min_filt_contig_length > ${logfile.baseName}.log
+	logstats.sh $logfile $allvcflog $filtvcflog 1 $min_filt_contig_vars > ${logfile.baseName}.log
 	"""
 	
 }
