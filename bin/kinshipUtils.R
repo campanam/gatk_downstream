@@ -1,6 +1,6 @@
 #----------------------------------------------------------------------------------
 # kinshipUtils
-# Michael G. Campana, 2018
+# Michael G. Campana, 2018, Updated 2024
 # Smithsonian Conservation Biology Institute
 #----------------------------------------------------------------------------------
 
@@ -26,7 +26,6 @@ bootstrap.kinship <- function(gdsobj, ibdmethod = c("MoM", "MLE"), sample.id = N
 	}
 	res <- cbind(res, rowMeans(res[,3:resample+2]))
 	sterrs <- apply(res[3:(i+2)], 1, sd)
-	sterrs <- sterrs/sqrt(resample)
 	res <- cbind(res, sterrs)
 	res <- cbind(res, res[i+3] - 1.96 * res[i+4], res[i+3] + 1.96 * res[i+4])
 	colnames(res)[i+3] <- "MeanKinship"
