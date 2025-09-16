@@ -1,7 +1,7 @@
 # gatk_downstream  
 <img align="right" src="NZP-20180628-509SB_thumb.jpg">  
 
-Michael G. Campana, 2023-2024  
+Michael G. Campana, 2023-2025  
 Smithsonian's National Zoo & Conservation Biology Institute  
 
 Nextflow pipeline [1] for joint-genotyping and variant filtration using the Genome Analysis Toolkit [2] and VCFtools [3]. The pipeline also removes variants from difficult-to-align regions using GenMap [4], scripts from RatesTools [5], and BEDTools [6]. Kinship estimation is performed using SNPRelate [7] (with bootstrapping from kinshipUtils [8]) and ngsRelateV2 [9].  
