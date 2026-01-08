@@ -121,14 +121,7 @@ workflow.onComplete {
 workflow {
 	main:
 		refFaiDict(params.refseq)
-		if (params.chrlist == "NULL") {
-			extractChrNames(params.refseq)
-			chr_ch = extractChrNames.out.flatten().splitText(by: 1).map { it.replaceAll(/\n/, "")
-		} else {
-			chr_ch = channel.fromPath(params.chrlist).flatten().splitText(by: 1).map { it.replaceAll(/\n/, "")
-		}
-		chr_ch.view()
-		//createGenomicsDB(params.gvcfs, chr_ch, params.stem)
+
 }
 
 	
