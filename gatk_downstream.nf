@@ -25,45 +25,6 @@ process refDictFai {
 
 }
 
-process extractChrNames {
-
-	// Extract chromosome names from reference sequence to use all chromosomes
-	
-	input:
-	path refseq
-	
-	output:
-	path "${refseq.baseName}.chr.txt"
-	
-	"""
-	grep '>' $refseq | sed 's/>//g' | cut -f1 -d ' ' > ${refseq.baseName}.chr.txt
-	"""
-
-}
-
-process createGenomicsDB {
-
-	// Create chromosome-specific GenomicsDB
-	
-	publishDir "$params.outdir/01_ChrGenomicsDBs", mode: 'copy'
-	
-	input:
-	path gvcfs
-	val chr
-	val stem
-	
-	output:
-	path "${stem}_${chr}.tgz"
-	
-	"""
-	VARPATH=""
-	for file in ${gvcfs}/*.vcf.gz; do VARPATH+=" -V \$file"; done
-	$gatk GenomicsDBImport\$VARPATH --genomicsdb-workspace-path ${stem}_${chr} --intervals $chr
-	tar czf ${stem}_${chr}.tgz ${stem}_${chr}/*
-	"""
-
-}
-
 process genMapIndex {
 
 	// Generate GenMap index. From RatesTools 1.2.4
@@ -104,6 +65,264 @@ process genMapMap {
 	"""
 }
 
+process extractChrNames {
+
+	// Extract chromosome names from reference sequence to use all chromosomes
+	
+	input:
+	path refseq
+	
+	output:
+	path "${refseq.baseName}.chr.txt"
+	
+	"""
+	grep '>' $refseq | sed 's/>//g' | cut -f1 -d ' ' > ${refseq.baseName}.chr.txt
+	"""
+
+}
+
+process createGenomicsDB {
+
+	// Create chromosome-specific GenomicsDB
+	
+	publishDir "$params.outdir/01_ChrGenomicsDBs", mode: 'copy'
+	
+	input:
+	path gvcfs
+	val chr
+	val stem
+	
+	output:
+	path "${stem}_${chr}.tgz"
+	
+	"""
+	VARPATH=""
+	for file in ${gvcfs}/*.vcf.gz; do VARPATH+=" -V \$file"; done
+	$gatk GenomicsDBImport\$VARPATH --genomicsdb-workspace-path ${stem}_${chr} --intervals $chr
+	tar czf ${stem}_${chr}.tgz ${stem}_${chr}/*
+	"""
+
+}
+
+process jointGenotype {
+
+	// Joint-genotype gVCFs
+	
+	publishDir "$params.outdir/02_RawChrVCFs", mode: 'copy'
+	
+	input:
+	path db
+	path refseq
+	path "*"
+	
+	output:
+	path "${db.baseName}.vcf.gz"
+	
+	"""
+	tar xfz $db
+	$gatk GenotypeGVCFs -R $refseq -V gendb://${db.baseName} -O ${db.baseName}.vcf
+	bgzip ${db.baseName}.vcf
+	rm -r ${db.baseName}
+	"""
+
+}
+
+process vcftoolsSiteFilter {
+
+	// Perform VCFtools site filters on VCFs
+	// Modified from RatesTools 1.2.4: Armstrong & Campana 2023
+	
+	publishDir "$params.outdir/03_VCFtoolsFilterChrVCFs", mode: 'copy', pattern: '*vcftools.vcf.gz'
+	
+	input:
+	path raw_vcf
+	
+	output:
+	path("${raw_vcf.baseName[0..-5]}.vcftools.tmp")
+	path(raw_vcf)
+	path("${raw_vcf.baseName[0..-5]}.vcftools.vcf.gz")
+	
+	script:
+	if (params.vcftools_site_filters == "NULL")
+		"""
+		cp -P $raw_vcf ${raw_vcf.baseName[0..-5]}.vcftools.vcf.gz
+		vcftools --gzvcf $raw_vcf
+		cp .command.log ${raw_vcf.baseName[0..-5]}.vcftools.tmp
+		"""
+	else
+		"""
+		vcftools --gzvcf ${raw_vcf} --recode -c ${params.vcftools_site_filters} | bgzip > ${raw_vcf.baseName[0..-5]}.vcftools.vcf.gz
+		cp .command.log ${raw_vcf.baseName[0..-5]}.vcftools.tmp
+		"""
+
+}
+
+process sanityCheckLogs {
+
+	// Sanity check filtering logs and remove too short contigs as needed
+
+	label 'gzip'
+	
+	input:
+	path logfile
+	path allvcflog
+	path filtvcflog
+	val min_contig_length
+	val min_filt_contig_length
+	
+	output:
+	path "${logfile.baseName}.log",  emit: log
+	path "${filtvcflog.baseName.split(".vcf")[0]}.OK.vcf.gz", optional: true, emit: ok_vcf
+	
+	"""
+	logstats.sh $logfile $allvcflog $filtvcflog $min_contig_length $min_filt_contig_length  > ${logfile.baseName}.log
+	"""
+	
+}
+	
+	
+process gatkSiteFilter {
+
+	// Perform GATK site filters on VCFs
+	// Modified from RatesTools 1.2.4: Armstrong & Campana 2023
+	
+	publishDir "$params.outdir/04_GATKFilterChrVCFs", mode: 'copy', pattern: '*gatk.vcf.gz'
+	
+	input:
+	path vcftools_vcf
+	path refseq from params.refseq
+	path "*"
+	
+	output:
+	path("${vcftools_vcf.baseName[0..-17]}.gatk.tmp")
+	path(vcftools_vcf)
+	path("${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz")
+	
+	script:
+	if (params.gatk_site_filters == "NULL")
+		"""
+		ln -s $vcftools_vcf ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz
+		vcftools --gzvcf $vcftools_vcf
+		cp .command.log ${vcftools_vcf.baseName[0..-17]}.gatk.tmp
+		"""
+	else
+		"""
+		tabix $vcftools_vcf
+		$gatk VariantFiltration -R $refseq -V $vcftools_vcf -O tmp.vcf.gz ${params.gatk_site_filters}
+		$gatk SelectVariants -R $refseq -V tmp.vcf.gz -O ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz --exclude-filtered
+		rm tmp.vcf.gz
+		vcftools --gzvcf ${vcftools_vcf.baseName[0..-17]}.gatk.vcf.gz
+		tail .command.log > ${vcftools_vcf.baseName[0..-17]}.gatk.tmp
+		"""
+
+}
+
+process concatenateVCFs {
+
+	// Concatenate VCFs using BCFtools concat
+	// Attempt to sort by order in original file
+	
+	publishDir "$params.outdir/05_ConcatVCF", mode: 'copy'
+	
+	input:
+	path chrfile from chrfile_ch2
+	path "*" from gatk_ok_vcf_ch.collect()
+	val stem from params.stem
+	
+	output:
+	path "${stem}.all.vcf.gz" into concat_vcf_ch
+	
+	"""
+	#!/usr/bin/env bash
+	fileline=''
+	readarray -t chrs < $chrfile
+	len=\${#chrs[@]}
+	for ((i=0; i<\$len; i++)); do
+		if [ -f ${stem}_\${chrs[\$i]}.gatk.OK.vcf.gz ]; then
+			fileline+="  ${stem}_\${chrs[\$i]}.gatk.OK.vcf.gz"
+		fi
+	done
+	bcftools concat -O v -o ${stem}.all.vcf.gz\$fileline
+	"""
+
+}
+
+process filterMappability {
+
+	// Remove sites with mappability < 1.0 using BEDtools
+	
+	publishDir "$params.outdir/06_MapFiltVCF", mode: 'copy'
+	
+	input:
+	path vcf from concat_vcf_ch
+	path bed from genmap_ch
+	val stem from params.stem
+	
+	output:
+	path "${stem}.map.vcf.gz" into map_vcf_ch,map_vcf_ch2
+	
+	"""
+	bedtools subtract -a $vcf -b $bed -header | gzip > ${stem}.map.vcf.gz
+	"""
+
+}
+
+process snpRelate {
+
+	// Estimate kinship using SNPRelate
+	
+	publishDir "$params.outdir/07_SNPRelate", mode: 'copy'
+	
+	input:
+	path vcf from map_vcf_ch
+	val stem from params.stem
+	val snprelate_opts from params.snprelate_opts
+	val snprelate_ld from params.snprelate_ld
+	
+	output:
+	path "${stem}.gds"
+	path "${stem}*.csv"
+	path "${stem}.snprelate.log"
+	path "${stem}.Rdata"
+	
+	"""
+	#!/usr/bin/env Rscript
+	library("SNPRelate")
+	source(system("which kinshipUtils.R", intern = TRUE))
+	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${stem}.gds\', method = "biallelic.only")
+	snps <- snpgdsOpen(\'${stem}.gds\')
+	pruned <- snpgdsLDpruning(snps, $snprelate_opts, ld.threshold = $snprelate_ld)
+	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), $snprelate_opts, num.thread = ${task.cpus})
+	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts, num.thread = ${task.cpus}, ld.threshold = $snprelate_ld)
+	write.kinship.matrix(bootstrapped, meanfile = \"${stem}_bootstrap_meanvalues.csv\", cifile = \"${stem}_random_kinship_CI.csv\")
+	system(\"cp .command.log ${stem}.snprelate.log\")
+	save.image(file = \"${stem}.Rdata\")
+	"""
+
+}
+
+process ngsRelate {
+
+	// Estimate kinship using ngsRelate
+	// Requires local compilation and installation of ngsRelate v2 commit ec95c8f built with htslib v 1.18 commit 99415e2
+	
+	publishDir "$params.outdir/08_ngsRelate", mode: 'copy'
+	
+	input:
+	path vcf from map_vcf_ch2
+	val stem from params.stem
+	val ngsrelate_opts from params.ngsrelate_opts
+	
+	output:
+	path "${stem}.ngsRelate.res"
+	
+	"""
+	zgrep -m1 '#CHROM' $vcf | cut -f10- | sed "s/\\t/\\n/g" > sampleids.txt
+	ngsRelate -h $vcf -O ${stem}.ngsRelate.res $ngsrelate_opts -p ${task.cpus} -z sampleids.txt -n `wc -l sampleids.txt`
+	"""
+	
+}
+
 workflow.onComplete {
 	if (workflow.success) {
 		println "Joint-genotyping pipeline completed successfully at $workflow.complete!"
@@ -118,17 +337,45 @@ workflow.onComplete {
 	}
 }
 
+workflow logVcftoolsSanity {
+	// Sanity check logs from VCFtools site filtering. From RatesTools 1.2.4
+	take:
+		tmpfile
+		rawvcf
+		filtvcf
+	main:
+		sanityCheckLogs(tmpfile, rawvcf, filtvcf, params.min_contig_length, params.min_filt_contig_length)
+	emit:
+		sanelog = sanityCheckLogs.out.log
+		ok_vcf = sanityCheckLogs.out.ok_vcf
+}
+
+workflow logGatkSanity {
+	// Sanity check logs for GATK site filtering and remove too short contigs. From RatesTools 1.2.4
+	// Dummy value of 1 for min_contig_length since already evalutated and no longer accurate
+	take:
+		tmpfile
+		rawvcf
+		filtvcf
+	main:
+		sanityCheckLogs(tmpfile, rawvcf, filtvcf, 1, params.min_filt_contig_length)
+	emit:
+		sanelog = sanityCheckLogs.out.log
+		ok_vcf = sanityCheckLogs.out.ok_vcf
+}
+
+
 workflow {
 	main:
 		refDictFai(params.refseq)
+		genMapIndex(params.refseq, params.gm_tmpdir) | genMapMap
 		if (params.chrlist == "NULL") {
 			extractChrNames(params.refseq)
 			chr_ch = extractChrNames.out.flatten().splitText(by: 1).map { it.replaceAll(/\n/, "") }
 		} else {
 			chr_ch = channel.fromPath(params.chrlist).flatten().splitText(by: 1).map { it.replaceAll(/\n/, "") }
 		}
-		chr_ch.view()
-		//createGenomicsDB(params.gvcfs, chr_ch, params.stem)
-}
-
-	
+		createGenomicsDB(params.gvcfs, chr_ch, params.stem)
+		jointGenotype(createGenomicsDB.out, params.refseq, refDictFai.out) | vcftoolsSiteFilter | logVcftoolsSanity
+		gatkSiteFilter(logVcftoolsSanity.out.ok_vcf, params.refseq, refDictFai.out) | logGatkSanity
+}	
