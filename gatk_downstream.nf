@@ -225,12 +225,11 @@ process concatenateVCFs {
 	publishDir "$params.outdir/05_ConcatVCF", mode: 'copy'
 	
 	input:
-	path chrfile from chrfile_ch2
-	path "*" from gatk_ok_vcf_ch.collect()
-	val stem from params.stem
+	path chrfile
+	path "*"
 	
 	output:
-	path "${stem}.all.vcf.gz" into concat_vcf_ch
+	path "${params.stem}.all.vcf.gz"
 	
 	"""
 	#!/usr/bin/env bash
@@ -238,11 +237,11 @@ process concatenateVCFs {
 	readarray -t chrs < $chrfile
 	len=\${#chrs[@]}
 	for ((i=0; i<\$len; i++)); do
-		if [ -f ${stem}_\${chrs[\$i]}.gatk.OK.vcf.gz ]; then
-			fileline+="  ${stem}_\${chrs[\$i]}.gatk.OK.vcf.gz"
+		if [ -f ${params.stem}_\${chrs[\$i]}.gatk.OK.vcf.gz ]; then
+			fileline+="  ${params.stem}_\${chrs[\$i]}.gatk.OK.vcf.gz"
 		fi
 	done
-	bcftools concat -O v -o ${stem}.all.vcf.gz\$fileline
+	bcftools concat -O v -o ${params.stem}.all.vcf.gz\$fileline
 	"""
 
 }
@@ -254,15 +253,14 @@ process filterMappability {
 	publishDir "$params.outdir/06_MapFiltVCF", mode: 'copy'
 	
 	input:
-	path vcf from concat_vcf_ch
-	path bed from genmap_ch
-	val stem from params.stem
+	path vcf
+	path bed
 	
 	output:
-	path "${stem}.map.vcf.gz" into map_vcf_ch,map_vcf_ch2
+	path "${params.stem}.map.vcf.gz"
 	
 	"""
-	bedtools subtract -a $vcf -b $bed -header | gzip > ${stem}.map.vcf.gz
+	bedtools subtract -a $vcf -b $bed -header | gzip > ${params.stem}.map.vcf.gz
 	"""
 
 }
@@ -275,28 +273,25 @@ process snpRelate {
 	
 	input:
 	path vcf from map_vcf_ch
-	val stem from params.stem
-	val snprelate_opts from params.snprelate_opts
-	val snprelate_ld from params.snprelate_ld
 	
 	output:
-	path "${stem}.gds"
-	path "${stem}*.csv"
-	path "${stem}.snprelate.log"
-	path "${stem}.Rdata"
+	path "${params.stem}.gds"
+	path "${params.stem}*.csv"
+	path "${params.stem}.snprelate.log"
+	path "${params.stem}.Rdata"
 	
 	"""
 	#!/usr/bin/env Rscript
 	library("SNPRelate")
 	source(system("which kinshipUtils.R", intern = TRUE))
-	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${stem}.gds\', method = "biallelic.only")
-	snps <- snpgdsOpen(\'${stem}.gds\')
-	pruned <- snpgdsLDpruning(snps, $snprelate_opts, ld.threshold = $snprelate_ld)
-	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), $snprelate_opts, num.thread = ${task.cpus})
-	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", $snprelate_opts, num.thread = ${task.cpus}, ld.threshold = $snprelate_ld)
-	write.kinship.matrix(bootstrapped, meanfile = \"${stem}_bootstrap_meanvalues.csv\", cifile = \"${stem}_random_kinship_CI.csv\")
-	system(\"cp .command.log ${stem}.snprelate.log\")
-	save.image(file = \"${stem}.Rdata\")
+	snpgdsVCF2GDS(Sys.readlink(\'$vcf\'), \'${params.stem}.gds\', method = "biallelic.only")
+	snps <- snpgdsOpen(\'${params.stem}.gds\')
+	pruned <- snpgdsLDpruning(snps, ${params.snprelate_opts}, ld.threshold = ${params.snprelate_ld})
+	whole_kinship <- snpgdsIBDMLE(snps, snp.id = unlist(pruned), ${params.snprelate_opts}, num.thread = ${task.cpus})
+	bootstrapped <- bootstrap.kinship(snps, ibdmethod = "MLE", ${params.snprelate_opts}, num.thread = ${task.cpus}, ld.threshold = ${params.snprelate_ld})
+	write.kinship.matrix(bootstrapped, meanfile = \"${params.stem}_bootstrap_meanvalues.csv\", cifile = \"${params.stem}_random_kinship_CI.csv\")
+	system(\"cp .command.log ${params.stem}.snprelate.log\")
+	save.image(file = \"${params.stem}.Rdata\")
 	"""
 
 }
@@ -309,16 +304,14 @@ process ngsRelate {
 	publishDir "$params.outdir/08_ngsRelate", mode: 'copy'
 	
 	input:
-	path vcf from map_vcf_ch2
-	val stem from params.stem
-	val ngsrelate_opts from params.ngsrelate_opts
+	path vcf
 	
 	output:
-	path "${stem}.ngsRelate.res"
+	path "${params.stem}.ngsRelate.res"
 	
 	"""
 	zgrep -m1 '#CHROM' $vcf | cut -f10- | sed "s/\\t/\\n/g" > sampleids.txt
-	ngsRelate -h $vcf -O ${stem}.ngsRelate.res $ngsrelate_opts -p ${task.cpus} -z sampleids.txt -n `wc -l sampleids.txt`
+	ngsRelate -h $vcf -O ${params.stem}.ngsRelate.res ${params.ngsrelate_opts} -p ${task.cpus} -z sampleids.txt -n `wc -l sampleids.txt`
 	"""
 	
 }
@@ -378,4 +371,11 @@ workflow {
 		createGenomicsDB(params.gvcfs, chr_ch, params.stem)
 		jointGenotype(createGenomicsDB.out, params.refseq, refDictFai.out) | vcftoolsSiteFilter | logVcftoolsSanity
 		gatkSiteFilter(logVcftoolsSanity.out.ok_vcf, params.refseq, refDictFai.out) | logGatkSanity
-}	
+		if (params.chrlist == "NULL") {
+			concatenateVCFs(extractChrNames.out, logGatkSanity.out.ok_vcf.collect())
+		} else {
+			concatenateVCFs(params.chrlist, logGatkSanity.out.ok_vcf.collect())
+		}
+		filterMappability(concatenateVCFs.out, genMapMap.out) | snpRelate
+		ngsRelate(filterMappability.out)
+}
