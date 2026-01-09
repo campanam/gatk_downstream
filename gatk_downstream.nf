@@ -271,7 +271,7 @@ process snpRelate {
 	publishDir "$params.outdir/07_SNPRelate", mode: 'copy'
 	
 	input:
-	path vcf from map_vcf_ch
+	path vcf
 	
 	output:
 	path "${params.stem}.gds"
