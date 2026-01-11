@@ -259,7 +259,8 @@ process filterMappability {
 	path "${params.stem}.map.vcf.gz"
 	
 	"""
-	bedtools subtract -a $vcf -b $bed -header | gzip > ${params.stem}.map.vcf.gz
+	bedtools merge -i $bed > tmp.bed
+	bedtools subtract -a $vcf -b tmp.bed -header | gzip > ${params.stem}.map.vcf.gz
 	"""
 
 }
