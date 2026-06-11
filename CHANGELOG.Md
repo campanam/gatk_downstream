@@ -4,7 +4,7 @@ Michael G. Campana, 2023-2026
 Smithsonian's National Zoo and Conservation Biology Institute  
 
 ### Version 0.2.2  
-Add options to turn on/off SNPRElate and ngsRelateV2  
+Add options to turn on/off SNPRelate and ngsRelateV2  
 Add default conda configurations for mappability filtering, SNPRelate, ngsRelateV2  
 
 ### Version 0.2.1  
