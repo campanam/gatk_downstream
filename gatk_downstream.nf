@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 
-/* GATK Joint-Genotyping Pipeline version 0.2.0
+/* GATK Joint-Genotyping Pipeline version 0.2.2
 Michael G. Campana, 2023-2026
 Smithsonian\'s National Zoo and Conservation Biology Institute
 
@@ -376,6 +376,7 @@ workflow {
 		} else {
 			concatenateVCFs(params.chrlist, logGatkSanity.out.ok_vcf.collect())
 		}
-		filterMappability(concatenateVCFs.out, genMapMap.out) | snpRelate
-		ngsRelate(filterMappability.out)
+		filterMappability(concatenateVCFs.out, genMapMap.out) 
+		if (params.snprelate) { snpRelate(filterMappability.out) }
+		if (params.ngsrelate) { ngsRelate(filterMappability.out) }
 }
