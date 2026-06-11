@@ -31,8 +31,10 @@ The `nextflow.config` file included with this repository contains a standard pro
 `min_filt_contig_vars`: Minimum number of variants on a contig (after filtering) to retain in analysis  
 `gm_tmpdir`: Scratch directory for GenMap indexing  
 `gm_opts`: Specifies mapping parameters (as a string) for GenMap. Use cpus in the process configuration to set number of concurrent threads.  
+`snprelate`: Run SNPRelate (true or false)  
 `snprelate_ld`: LD-threshold for SNPRelate  
 `snprelate_opts`: String of other SNPRelate options (excluding LD-threshold)  
+`ngsrelate`: Run ngsRelateV2 (true or false)  
 `ngsrelate_opts`: String of options for ngsRelateV2 (other than number of threads)  
 `email`: Email to send completion status to. Set to "NULL" for no email.  
 
